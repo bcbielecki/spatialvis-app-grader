@@ -77,7 +77,7 @@ def convert_svgs_to_pngs_inkscape(input_folder, output_folder, student=True):
 
 
 
-file_path = r"C:\Users\ant91\Downloads\python\data\SV_Students_SE3_2025_Python_Data.xlsx"
+file_path = r".\SV_Students_SE3_2025_Python_Data.xlsx"
 df = pd.read_excel(file_path)
 
 def download_svg(url, output_path, retries=3, delay=5, timeout=30):
@@ -1274,9 +1274,9 @@ def download_backgrounds(sheet_path, output_path, columns=('grid_image_file_url'
     print(f"Background images downloaded to {output_path}!")
 
 # 0. Download background images first
-background_folder = r"C:\Users\ant91\Downloads\python\data\backgrounds"
+background_folder = r".\backgrounds"
 download_backgrounds(
-    sheet_path=r"C:\Users\ant91\Downloads\python\data\SV_Students_SE3_2025_Python_Data.xlsx",
+    sheet_path=r".\SV_Students_SE3_2025_Python_Data.xlsx",
     output_path=background_folder,
     columns=('grid_image_file_url', 'assignment_code'),
     sheet_index='assignments'
@@ -1284,16 +1284,16 @@ download_backgrounds(
 
 # 1. Prepare data and images
 prepare_analysis(
-    excel_file=r"C:\Users\ant91\Downloads\python\data\SV_Students_SE3_2025_Python_Data.xlsx",
-    image_folder=r"C:\Users\ant91\Downloads\python\data\images",
+    excel_file=r".\SV_Students_SE3_2025_Python_Data.xlsx",
+    image_folder=r".\images",
     sID='36232',
     background_folder=background_folder  # Use the populated folder
 )
 
 # 2. Run the analysis GUI
 run_analysis(
-    image_folder=r"C:\Users\ant91\Downloads\python\data\images",
-    excel_file=r"C:\Users\ant91\Downloads\python\data\SV_Students_SE3_2025_Python_Data.xlsx",
+    image_folder=r".\images",
+    excel_file= r".\SV_Students_SE3_2025_Python_Data.xlsx",
     start_index=0,
     sID='36232',
     load_in=True
