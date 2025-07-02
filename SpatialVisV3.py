@@ -32,7 +32,6 @@ import ast # Library to parse pythonic grammer without error
 import subprocess
 import os
 import time
-import requests
 
 def convert_svg_to_png_inkscape(svg_path, png_path, width=None, height=None, x0=480, y0=480, x1=1120, y1=1120):
     inkscape_path = r"C:\Program Files\Inkscape\bin\inkscape.exe"
