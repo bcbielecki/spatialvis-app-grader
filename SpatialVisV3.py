@@ -12,6 +12,13 @@
         result_message(grading_metrics)
         get_results(grading_metrics)
         run_analysis(image_folder, excel_file, start_index, sID, load_in, if_exists)
+
+    To run the program:
+        (1) Open a terminal in the root project directory
+        (2) Run the command 'py SpatialVisV3.py [Excel file path] [Student ID]'
+                - where [Excel file path] is the path to the excel file which you will use for analysis
+                  Ex) 'BlankTemplate.xlsx' or 'C:/Users/Bob/BlankTemplate.xlsx'
+                - where [Student ID] is the numeric ID of the student whose data you would like to analyze
 """
 import reportlab.rl_config
 reportlab.rl_config.renderPMBackend = 'rlPyCairo'  # Use rlPyCairo as the renderer
@@ -36,6 +43,7 @@ import threading
 from pathlib import Path
 from queue import Queue # thread-safe
 import queue
+import sys
 
 
 def convert_svg_to_png_inkscape(svg_path, png_path, width=None, height=None, x0=480, y0=480, x1=1120, y1=1120):
@@ -133,10 +141,6 @@ def convert_all_submissions_png_to_svg(input_assignments_dir: Path, output_assig
     # Initial performance tests show a 65-70% improvement in time consumed by the image conversions
     # when comparing a single-threaded operation to a four-thread operation on an Intel x86-64 8-core / 16 thread machine
     print(f"SVG to PNG image conversions Complete! It took {time.time() - perf_check_start_time} seconds to convert {num_images} images.")
-
-
-file_path = r".\BlankTemplate.xlsx"
-df = pd.read_excel(file_path)
 
 def download_svg(url, output_path, retries=3, delay=5, timeout=30):
     for attempt in range(retries):
@@ -1333,28 +1337,73 @@ def download_backgrounds(sheet_path, output_path, columns=('grid_image_file_url'
         download_svg(url, filename)
     print(f"Background images downloaded to {output_path}!")
 
-# 0. Download background images first
-background_folder = r".\backgrounds"
-download_backgrounds(
-    sheet_path=r".\BlankTemplate.xlsx",
-    output_path=background_folder,
-    columns=('grid_image_file_url', 'assignment_code'),
-    sheet_index='assignments'
-)
 
-# 1. Prepare data and images
-prepare_analysis(
-    excel_file=r".\BlankTemplate.xlsx",
-    image_folder=r".\images",
-    sID='36232',
-    background_folder=background_folder  # Use the populated folder
-)
 
-# 2. Run the analysis GUI
-run_analysis(
-    image_folder=r".\images",
-    excel_file= r".\BlankTemplate.xlsx",
-    start_index=0,
-    sID='36232',
-    load_in=True
-)
+if __name__ == '__main__':
+
+    excel_file_path = None
+    student_id = None
+
+    if len(sys.argv) == 3:
+        try:
+            excel_file_path = Path(sys.argv[1])
+        except:
+            raise ValueError("Invalid Excel file path as second argument")
+        
+        try:
+            student_id = str(sys.argv[2])
+        except:
+            raise ValueError("Invalid student ID as third argument")
+    elif len(sys.argv) == 1:
+        while excel_file_path is None:
+            input_file_path = input("Enter an Excel file path (ex. 'file.xlsx' or 'C:\\\\User\\Bob\\file.xlsx') without quotes: ")
+            try:
+                excel_file_path = Path(input_file_path)
+            except:
+                print("Invalid Excel file path. Try again.")
+
+        while student_id is None:
+            input_student_id = input("Enter a numeric student ID: ")
+            try:
+                student_id = str(input_student_id)
+            except:
+                print("Invalid student ID. Try again.")
+    else:
+        raise ValueError("Invalid number of arguments. Expected command format is 'py SpatioalVisV3.py' OR 'py SpatialVisV3.py [Excel file path] [Student ID]' ")
+
+    
+    Path("./images").mkdir(exist_ok=True)
+    Path("./backgrounds").mkdir(exist_ok=True)
+
+    if not Path("./images/problems_png").exists() or not Path("./images/solns_png").exists():
+        raise FileNotFoundError("The master files for assignment problems and solutions are missing and must be placed in /images/problems_png and /images/solns_png before running the program.")
+
+    file_path = str(excel_file_path)
+    df = pd.read_excel(file_path)
+
+    # 0. Download background images first
+    background_folder = r".\backgrounds"
+    download_backgrounds(
+        sheet_path=str(excel_file_path),
+        output_path=background_folder,
+        columns=('grid_image_file_url', 'assignment_code'),
+        sheet_index='assignments'
+    )
+
+    # 1. Prepare data and images
+    prepare_analysis(
+        excel_file=str(excel_file_path),
+        image_folder=r".\images",
+        sID=student_id,
+        background_folder=background_folder  # Use the populated folder
+    )
+
+    # 2. Run the analysis GUI
+    run_analysis(
+        image_folder=r".\images",
+        excel_file=str(excel_file_path),
+        start_index=0,
+        sID=student_id,
+        load_in=True
+    )
+
