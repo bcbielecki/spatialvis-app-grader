@@ -32,6 +32,18 @@ import ast # Library to parse pythonic grammer without error
 import subprocess
 import os
 import time
+import threading
+
+
+def batch_svg_to_png_inkscape(input_parent_path: str, input_file_list: list[str], output_parent):
+    for filename in input_file_list:
+        if filename.endswith(".svg"):
+                svg_path = os.path.join(input_parent_path, filename)
+                png_filename = os.path.splitext(filename)[0] + ".png"
+                png_path = os.path.join(output_parent, png_filename)
+                convert_svg_to_png_inkscape(svg_path, png_path, width=320, height=320)
+
+
 
 def convert_svg_to_png_inkscape(svg_path, png_path, width=None, height=None, x0=480, y0=480, x1=1120, y1=1120):
     inkscape_path = r"C:\Program Files\Inkscape\bin\inkscape.exe"
@@ -61,22 +73,29 @@ def convert_svgs_to_pngs_inkscape(input_folder, output_folder, student=True):
         os.makedirs(output_folder)
     
     if student:
+        start = time.time()
         for input_parent in os.listdir(input_folder):
             output_parent = os.path.join(output_folder, input_parent)
             if not os.path.exists(output_parent):
                 os.makedirs(output_parent)
             input_parent_path = os.path.join(input_folder, input_parent)
-            
-            for filename in os.listdir(input_parent_path):
-                if filename.endswith(".svg"):
-                    svg_path = os.path.join(input_parent_path, filename)
-                    png_filename = os.path.splitext(filename)[0] + ".png"
-                    png_path = os.path.join(output_parent, png_filename)
-                    convert_svg_to_png_inkscape(svg_path, png_path, width=320, height=320)
+
+            input_file_list = os.listdir(input_parent_path)
+            first_half_input_file_list = input_file_list[:int(len(input_file_list)/2)]
+            second_half_input_file_list = input_file_list[int(len(input_file_list)/2):]
+
+            t1 = threading.Thread(target=batch_svg_to_png_inkscape, args=(input_parent_path, first_half_input_file_list, output_parent))
+            t2 = threading.Thread(target=batch_svg_to_png_inkscape, args=(input_parent_path, second_half_input_file_list, output_parent))
+
+            t1.start()
+            t2.start()
+
+            t1.join()
+            t2.join()
+        print(f"It took {time.time() - start} seconds to download!")
 
 
-
-file_path = r".\SV_Students_SE3_2025_Python_Data.xlsx"
+file_path = r".\BlankTemplate.xlsx"
 df = pd.read_excel(file_path)
 
 def download_svg(url, output_path, retries=3, delay=5, timeout=30):
@@ -1275,7 +1294,7 @@ def download_backgrounds(sheet_path, output_path, columns=('grid_image_file_url'
 # 0. Download background images first
 background_folder = r".\backgrounds"
 download_backgrounds(
-    sheet_path=r".\SV_Students_SE3_2025_Python_Data.xlsx",
+    sheet_path=r".\BlankTemplate.xlsx",
     output_path=background_folder,
     columns=('grid_image_file_url', 'assignment_code'),
     sheet_index='assignments'
@@ -1283,7 +1302,7 @@ download_backgrounds(
 
 # 1. Prepare data and images
 prepare_analysis(
-    excel_file=r".\SV_Students_SE3_2025_Python_Data.xlsx",
+    excel_file=r".\BlankTemplate.xlsx",
     image_folder=r".\images",
     sID='36232',
     background_folder=background_folder  # Use the populated folder
@@ -1292,7 +1311,7 @@ prepare_analysis(
 # 2. Run the analysis GUI
 run_analysis(
     image_folder=r".\images",
-    excel_file= r".\SV_Students_SE3_2025_Python_Data.xlsx",
+    excel_file= r".\BlankTemplate.xlsx",
     start_index=0,
     sID='36232',
     load_in=True
