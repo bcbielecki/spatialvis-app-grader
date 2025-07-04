@@ -33,16 +33,9 @@ import subprocess
 import os
 import time
 import threading
-
-
-def batch_svg_to_png_inkscape(input_parent_path: str, input_file_list: list[str], output_parent):
-    for filename in input_file_list:
-        if filename.endswith(".svg"):
-                svg_path = os.path.join(input_parent_path, filename)
-                png_filename = os.path.splitext(filename)[0] + ".png"
-                png_path = os.path.join(output_parent, png_filename)
-                convert_svg_to_png_inkscape(svg_path, png_path, width=320, height=320)
-
+from pathlib import Path
+from queue import Queue # thread-safe
+import queue
 
 
 def convert_svg_to_png_inkscape(svg_path, png_path, width=None, height=None, x0=480, y0=480, x1=1120, y1=1120):
@@ -67,32 +60,79 @@ def convert_svg_to_png_inkscape(svg_path, png_path, width=None, height=None, x0=
         print(f"Failed to convert {svg_path}: {e}")
 
 
-def convert_svgs_to_pngs_inkscape(input_folder, output_folder, student=True):
-    """Replace your existing convert_svgs_to_pngs function with this"""
-    if not os.path.exists(output_folder):
-        os.makedirs(output_folder)
+def perform_png_to_svg_jobs(image_job_queue : Queue((Path, Path))):
+    '''
+    This function is to be called by threads performing png-to-svg-conversions. It accepts
+    a thread-safe Queue object as input. The Queue should contain tuple mappings of 
+    the original path to destination path for each image to convert.
+    '''
+    while not image_job_queue.empty():
+        try:
+            input_svg_path, output_png_path = image_job_queue.get(block=False)
+            convert_svg_to_png_inkscape(input_svg_path, output_png_path, width=320, height=320)
+            image_job_queue.task_done()
+        except queue.Empty or queue.ShutDown:
+            break
+
+def convert_all_submissions_png_to_svg(input_assignments_dir: Path, output_assignments_dir: Path, num_threads=2):
+    '''
+    This function converts images under the input_assignments_dir folder/directory from SVG to PNG format.
+    The converted images are stored in the output_assignments_dir folder, preserving the same folder structure as in
+    input_assignments_dir. The expected folder structure is as follows:
+
+    # The input assignments folder/directory contains a folder for each assignment
+    # and the submissions for that assignment as svg images within the assignment folder
+
+    # Example folder structure:
+    #
+    #             input_assignments_dir
+    #                       |
+    #                       --------- assignment1_dir
+    #                       |
+    #                       --------- assignment2_dir
+    #                                        |
+    #                                        ------ assignment2_submission1.svg
+    #                                        |
+    #                                        ------ assignment2_submission2.svg
+    #
+    '''
+    output_assignments_dir.mkdir(exist_ok=True) # Creates a folder only if it does not already exist
+
+    num_images = 0
+    image_job_queue = Queue()
+
+    # We're going to populate a queue with tuples containing information about all images we want to convert:
+    # Each tuple is a mapping of the input image path to output image path.
+    for individual_input_assignment_dir in input_assignments_dir.iterdir():
+        for input_svg_submission_path in individual_input_assignment_dir.iterdir():
+            if input_svg_submission_path.suffix == ".svg": 
+                output_assignment_dir = output_assignments_dir / individual_input_assignment_dir.name 
+                output_assignment_dir.mkdir(parents=True, exist_ok=True)
+
+                output_png_submission_path = output_assignment_dir / input_svg_submission_path.name 
+                image_job_queue.put((input_svg_submission_path, output_png_submission_path))
+                num_images += 1
+
     
-    if student:
-        start = time.time()
-        for input_parent in os.listdir(input_folder):
-            output_parent = os.path.join(output_folder, input_parent)
-            if not os.path.exists(output_parent):
-                os.makedirs(output_parent)
-            input_parent_path = os.path.join(input_folder, input_parent)
+    perf_check_start_time = time.time()
 
-            input_file_list = os.listdir(input_parent_path)
-            first_half_input_file_list = input_file_list[:int(len(input_file_list)/2)]
-            second_half_input_file_list = input_file_list[int(len(input_file_list)/2):]
+    # Then, we start the threads. Each thread will have access to the same queue. 
+    # A thread will take a job from the queue, perform the job, then move onto the next available one
+    # until the queue is empty.
+    thread_list = []
+    for i in range(num_threads):
+        new_thread = threading.Thread(target=perform_png_to_svg_jobs, args=(image_job_queue,))
+        new_thread.start()
+        thread_list.append(new_thread)
 
-            t1 = threading.Thread(target=batch_svg_to_png_inkscape, args=(input_parent_path, first_half_input_file_list, output_parent))
-            t2 = threading.Thread(target=batch_svg_to_png_inkscape, args=(input_parent_path, second_half_input_file_list, output_parent))
+    # Now, we wait for all the threads to finish and for the queue to be empty (no more images to convert)
+    for thread in thread_list:
+        thread.join()
+    image_job_queue.join()
 
-            t1.start()
-            t2.start()
-
-            t1.join()
-            t2.join()
-        print(f"It took {time.time() - start} seconds to download!")
+    # Initial performance tests show a 65-70% improvement in time consumed by the image conversions
+    # when comparing a single-threaded operation to a four-thread operation on an Intel x86-64 8-core / 16 thread machine
+    print(f"SVG to PNG image conversions Complete! It took {time.time() - perf_check_start_time} seconds to convert {num_images} images.")
 
 
 file_path = r".\BlankTemplate.xlsx"
@@ -476,6 +516,9 @@ def prepare_analysis(excel_file, image_folder, sID, background_folder):
     batch_download(excel_file, image_folder, sheet_index=f'{sID}')
     
     # 2. Overlay sketches on backgrounds
+    # The background images are the templates from which students compose their drawings.
+    # The student's drawings are submitted as separate images from the background images.
+    # The two images must now be recombined for our analysis.
     svg_output = os.path.join(image_folder, f'{sID}_svg')
     batch_overlay_images(
         background_folder,
@@ -486,10 +529,9 @@ def prepare_analysis(excel_file, image_folder, sID, background_folder):
     
     # 3. Convert SVGs to PNGs using Inkscape
     png_output = os.path.join(image_folder, f'{sID}_png')
-    convert_svgs_to_pngs_inkscape(  # Use Inkscape version
-        input_folder=svg_output,
-        output_folder=png_output,
-        student=True
+    convert_all_submissions_png_to_svg(  # Use Inkscape version
+        input_assignments_dir=Path(svg_output),
+        output_assignments_dir=Path(png_output),
     )
     
     # 4. Clean Excel data
