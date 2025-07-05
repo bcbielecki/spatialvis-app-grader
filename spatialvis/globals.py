@@ -1,6 +1,6 @@
 from pathlib import Path
 
-# The Inkscape path is not resilient to custom install paths or other operating system installs.
+# The Inkscape path below is not resilient to custom install paths or other operating system installs.
 # This may need to be modified in the future. 
 PATH_INKSCAPE = Path(r"C:\Program Files\Inkscape\bin\inkscape.exe")
 
