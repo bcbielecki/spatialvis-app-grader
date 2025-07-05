@@ -1,6 +1,7 @@
 
 from spatialvis.viscache import StartupCache
 from spatialvis.viscore import download_backgrounds, prepare_analysis, run_analysis
+from spatialvis import globals
 import sys
 from pathlib import Path
 
@@ -64,13 +65,14 @@ def launch_nogui():
 
     # Create any missing directories. No need to blow up.
     # TODO: These directories should be converted into global variables
-    Path("./images").mkdir(exist_ok=True)
-    Path("./backgrounds").mkdir(exist_ok=True)
+    globals.PATH_DATA.mkdir(exist_ok=True)
+    globals.PATH_DATA_IMAGES.mkdir(exist_ok=True)
+    globals.PATH_DATA_BACKGROUNDS.mkdir(exist_ok=True)
 
     # There's no way for us to download the problem and solution pngs automatically, so it will be the 
     # responsibility of the user to do so. Keep in mind, this is a basic check; if the folders exist, but their
     # contents are missing, the program will blow up later.
-    if not Path("./images/problems_png").exists() or not Path("./images/solns_png").exists():
+    if not globals.PATH_DATA_IMAGES_PROBLEMS.exists() or not globals.PATH_DATA_IMAGES_SOLUTIONS.exists():
         raise FileNotFoundError("The master files for assignment problems and solutions are missing and must be placed in /images/problems_png and /images/solns_png before running the program.")
 
 
@@ -88,14 +90,14 @@ def launch_nogui():
     # 1. Prepare data and images
     prepare_analysis(
         excel_file=str(excel_file_path),
-        image_folder=r".\images",
+        image_folder=globals.PATH_DATA_IMAGES,
         sID=student_id,
         background_folder=background_folder  # Use the populated folder
     )
 
     # 2. Run the analysis GUI
     run_analysis(
-        image_folder=r".\images",
+        image_folder=globals.PATH_DATA_IMAGES,
         excel_file=str(excel_file_path),
         start_index=0,
         sID=student_id,

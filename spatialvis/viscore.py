@@ -10,6 +10,7 @@ from lxml import etree
 import pandas as pd
 from reportlab.graphics import renderPM
 from svglib.svglib import svg2rlg
+from spatialvis import globals
 
 import os
 import requests
@@ -21,7 +22,7 @@ import threading
 
 
 def convert_svg_to_png_inkscape(svg_path, png_path, width=None, height=None, x0=480, y0=480, x1=1120, y1=1120):
-    inkscape_path = r"C:\Program Files\Inkscape\bin\inkscape.exe"
+    inkscape_path = str(globals.PATH_INKSCAPE)
 
     cmd = [
         inkscape_path,
