@@ -68,7 +68,7 @@ def convert_all_submissions_png_to_svg(input_assignments_dir: Path, output_assig
     # and the submissions for that assignment as svg images within the assignment folder
 
     # Example folder structure:
-#
+    #
     #             input_assignments_dir
     #                       |
     #                       --------- assignment1_dir
@@ -78,7 +78,7 @@ def convert_all_submissions_png_to_svg(input_assignments_dir: Path, output_assig
     #                                        ------ assignment2_submission1.svg
     #                                        |
     #                                        ------ assignment2_submission2.svg
-#
+    #
     '''
     output_assignments_dir.mkdir(exist_ok=True) # Creates a folder only if it does not already exist
 
