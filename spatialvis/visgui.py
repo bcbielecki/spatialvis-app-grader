@@ -1,61 +1,103 @@
-import json
+
+from spatialvis.viscache import StartupCache
+from spatialvis.viscore import download_backgrounds, prepare_analysis, run_analysis
+import sys
+from pathlib import Path
 
 
-def result_message(grading_metrics):
-    """
-    This is a function which takes the grading_metrics dictionary and determines what message was shown on the results screen
-        =====
-        Inputs: 
-            grading_metrics: A python dictionary with the grading results for the associated drawing, converted from a json object
-        Returns:
-            message: The message as astring of characters that the students would see on the results screen.
-    """
-    solid_correct = grading_metrics['test_add_pix'] and grading_metrics['test_mis_solid_pix'] and grading_metrics['test_add_blob_len'] and grading_metrics['test_mis_solid_blob_len']
-    dashed_correct = grading_metrics['test_dashed_blob_len'] and grading_metrics['test_gap_blob_len']
-    if grading_metrics['pass_sketch']:
-        return('Correct sketch')
-    elif grading_metrics['missing_one_long_solid_blob']:
-        return('You may be missing a line')
-    elif grading_metrics['fh_add_one_long_solid_blob']:
-        return('You may have too many line(s)')
-    elif grading_metrics['fh_large_tol']:
-        return('Close! Draw more carefully')
-    elif solid_correct and not dashed_correct:
-        return('Hidden line(s) incorrect')
+def launch_nogui():
+    excel_file_path = None
+    student_id = None
+
+    # For now, we will support two non-gui methods of launching the program:
+    # Method 1:
+    #    (1) Open a terminal in the root project directory
+    #    (2) Run the command 'py SpatialVisV3.py [Excel file path] [Student ID]'
+    #            - where [Excel file path] is the path to the excel file which you will use for analysis
+    #                Ex) 'BlankTemplate.xlsx' or 'C:/Users/Bob/BlankTemplate.xlsx'
+    #            - where [Student ID] is the numeric ID of the student whose data you would like to analyze
+    # Method 2:
+    #    (1) Open a terminal in the root project directory
+    #    (2) Run the command 'py SpatialVisV3.py'
+    #    (3) Provide information via interactive prompts
+
+    # Launch Method 1
+    if len(sys.argv) == 3:
+        try:
+            excel_file_path = Path(sys.argv[1])
+        except:
+            raise ValueError("Invalid Excel file path as second argument")
+
+        try:
+            student_id = str(sys.argv[2])
+        except:
+            raise ValueError("Invalid student ID as third argument")
+
+    # Launch Method 2
+    elif len(sys.argv) == 1:
+        saved_excel_file_path, saved_student_id = StartupCache.load()
+        while excel_file_path is None:
+            input_file_path = input(f"Enter an Excel file path (ex. 'file.xlsx' or 'C:\\\\User\\Bob\\file.xlsx') without quotes ({saved_excel_file_path}): ")
+            if input_file_path == "" and saved_excel_file_path is not None:
+                excel_file_path = saved_excel_file_path
+            else:
+                try:
+                    excel_file_path = Path(input_file_path)
+                except:
+                    print("Invalid Excel file path. Try again.")
+
+        while student_id is None:
+            input_student_id = input(f"Enter a numeric student ID ({saved_student_id}): ")
+            if input_student_id == "" and saved_student_id is not None:
+                    student_id = saved_student_id
+            else:
+                try:
+                    student_id = str(input_student_id)
+                except:
+                    print("Invalid student ID. Try again.")
     else:
-        return('Try again')
+        raise ValueError("Invalid number of arguments. Expected command format is 'py SpatialVisV3.py' OR 'py SpatialVisV3.py [Excel file path] [Student ID]' ")
 
 
-def get_results(grading_metrics_string):
-    r"""
-    This is a function that takes the grading_metrics dictionary and parses the drawing results. 
-        =====
-        Inputs:
-            grading_metrics_string: A python dictionary, as a string, with the grading results for the associated drawing, converted from a json object
-        Returns:
-            message: The string message shown to the students  
-            correct_percent: Percent of correct pixels from normalized pixel counts
-            missing_percent: Percent of missing pixels from normalized pixel counts
-            additional_percent: Percent of additionl pixels from normalized pixel counts
-        =====
-        Example Usage-Loop:
-            source_file = r"C:\Users\aaron\Documents\VERSA\VERSA_Students.xlsx"
-            df = pd.read_excel(source_file)
-            for ind in df.index:
-                if type(df.at[ind,'grading_metrics']) is str: 
-                    grading_metrics = json.loads(df.at[ind,'grading_metrics'])
-                    df.at[ind,'minihint_metrics'] = get_results(grading_metrics)
-                else:
-                    pass
-    """
-    # The grading metrics data is not all formatted properly thus a try statement is needed
-    try:
-        grading_metrics = json.loads(grading_metrics_string)
-        message = result_message(grading_metrics)
-        correct_percent = grading_metrics['n_cor_combined_pix_norm']/grading_metrics['n_sol_combined_pix_norm']
-        missing_percent = grading_metrics['n_mis_combined_pix_norm']/grading_metrics['n_sol_combined_pix_norm']
-        additional_percent = grading_metrics['n_add_pix_norm']/grading_metrics['n_sol_combined_pix_norm']
-    # If the json file cant be read it just returns a null
-    except:
-        return None, None, None, None
-    return message, correct_percent, missing_percent, additional_percent
+    # Save the user-provided excel file and student id. These can be used during the next launch to save time.
+    StartupCache.save(excel_file_path, student_id)
+
+    # Create any missing directories. No need to blow up.
+    # TODO: These directories should be converted into global variables
+    Path("./images").mkdir(exist_ok=True)
+    Path("./backgrounds").mkdir(exist_ok=True)
+
+    # There's no way for us to download the problem and solution pngs automatically, so it will be the 
+    # responsibility of the user to do so. Keep in mind, this is a basic check; if the folders exist, but their
+    # contents are missing, the program will blow up later.
+    if not Path("./images/problems_png").exists() or not Path("./images/solns_png").exists():
+        raise FileNotFoundError("The master files for assignment problems and solutions are missing and must be placed in /images/problems_png and /images/solns_png before running the program.")
+
+
+    #### Execute Download, Data Processing, then the Main Analysis GUI ####
+
+    # 0. Download background images first
+    background_folder = r".\backgrounds"
+    download_backgrounds(
+        sheet_path=str(excel_file_path),
+        output_path=background_folder,
+        columns=('grid_image_file_url', 'assignment_code'),
+        sheet_index='assignments'
+    )
+
+    # 1. Prepare data and images
+    prepare_analysis(
+        excel_file=str(excel_file_path),
+        image_folder=r".\images",
+        sID=student_id,
+        background_folder=background_folder  # Use the populated folder
+    )
+
+    # 2. Run the analysis GUI
+    run_analysis(
+        image_folder=r".\images",
+        excel_file=str(excel_file_path),
+        start_index=0,
+        sID=student_id,
+        load_in=True
+    )
