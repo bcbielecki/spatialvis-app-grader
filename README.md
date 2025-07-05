@@ -4,6 +4,8 @@ This is a graphical program for manually grading student submissions to the [Spa
 
 Student submission data must be exported as an Excel file from the Spatial Vis App and imported into the grading tool for analysis. The repository does not provide this data.
 
+This project is in active development with no planned release as of now. All installation and launch instructions are purely for developmental work. Licensing information is provided at the bottom of the readme file.
+
 ## Supported Systems
 
 The project has been developed for and tested on a Windows 11, Intel x86-64 machine with Python 3.13.5.
