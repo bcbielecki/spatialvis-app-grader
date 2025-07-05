@@ -46,6 +46,53 @@ import queue
 import sys
 
 
+class StartupCache:
+
+    cache_file_path = Path(".cache")
+
+    def __init__(self):
+        raise ValueError("StartupCache is not an instantiable class")
+    
+    def save(excel_file_path: Path, student_id: str) -> None:
+        '''
+        Saves data that will be used for the next program startup in a cache file
+        in the current working directory
+        '''
+
+        if StartupCache.cache_file_path.exists():
+            os.remove(StartupCache.cache_file_path)
+
+        data = dict()
+        data["excel_file_path"] = str(excel_file_path)
+        data["student_id"] = student_id
+
+        try:
+            with open(StartupCache.cache_file_path, 'w', encoding='utf-8') as cache_file:
+                json.dump(data, cache_file)
+        except IOError as e:
+            print(f"Error saving cache: {e}")
+
+    def load() -> (Path, str):
+        '''
+        Loads and returns data that will be used during program startup.
+        '''
+        excel_file_path = None
+        student_id = None
+
+        if StartupCache.cache_file_path.exists():
+
+            try:
+                with open(StartupCache.cache_file_path, 'r', encoding='utf-8') as cache_file:
+                    data = json.load(cache_file)
+                    excel_file_path = Path(data["excel_file_path"])
+                    student_id = str(data["student_id"])
+            except:
+                print(f"Error loading cache.")
+
+        return excel_file_path, student_id
+
+
+
 def convert_svg_to_png_inkscape(svg_path, png_path, width=None, height=None, x0=480, y0=480, x1=1120, y1=1120):
     inkscape_path = r"C:\Program Files\Inkscape\bin\inkscape.exe"
     
@@ -1355,23 +1402,30 @@ if __name__ == '__main__':
         except:
             raise ValueError("Invalid student ID as third argument")
     elif len(sys.argv) == 1:
+        saved_excel_file_path, saved_student_id = StartupCache.load()
         while excel_file_path is None:
-            input_file_path = input("Enter an Excel file path (ex. 'file.xlsx' or 'C:\\\\User\\Bob\\file.xlsx') without quotes: ")
-            try:
-                excel_file_path = Path(input_file_path)
-            except:
-                print("Invalid Excel file path. Try again.")
+            input_file_path = input(f"Enter an Excel file path (ex. 'file.xlsx' or 'C:\\\\User\\Bob\\file.xlsx') without quotes ({saved_excel_file_path}): ")
+            if input_file_path == "" and saved_excel_file_path is not None:
+                excel_file_path = saved_excel_file_path
+            else:
+                try:
+                    excel_file_path = Path(input_file_path)
+                except:
+                    print("Invalid Excel file path. Try again.")
 
         while student_id is None:
-            input_student_id = input("Enter a numeric student ID: ")
-            try:
-                student_id = str(input_student_id)
-            except:
-                print("Invalid student ID. Try again.")
+            input_student_id = input(f"Enter a numeric student ID ({saved_student_id}): ")
+            if input_student_id == "" and saved_student_id is not None:
+                    student_id = saved_student_id
+            else:
+                try:
+                    student_id = str(input_student_id)
+                except:
+                    print("Invalid student ID. Try again.")
     else:
         raise ValueError("Invalid number of arguments. Expected command format is 'py SpatioalVisV3.py' OR 'py SpatialVisV3.py [Excel file path] [Student ID]' ")
 
-    
+    StartupCache.save(excel_file_path, student_id)
     Path("./images").mkdir(exist_ok=True)
     Path("./backgrounds").mkdir(exist_ok=True)
 
