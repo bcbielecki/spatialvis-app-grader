@@ -1,101 +1,28 @@
-"""
-    A module that contains the functions related Spatial Vis Analysis.  
-    =====
-    Contains the following functions:
-        download_svg(url, output_path)
-        batch_download(sheet_path, output_path, columns, sheet_index, student)
-        overlay_svgs(background_path, overlay_path, output_path, x, y)
-        batch_overlay_svgs(background_folder, overlay_folder, output_folder, x, y, student)
-        convert_svgs_to_pngs(input_folder, output_folder, student)
-        clean_data(source_file, student_ID)
-        save_excel(data_frame, source_file, sheet_name, if_exists)
-        result_message(grading_metrics)
-        get_results(grading_metrics)
-        run_analysis(image_folder, excel_file, start_index, sID, load_in, if_exists)
-
-    To run the program:
-        (1) Open a terminal in the root project directory
-        (2) Run the command 'py SpatialVisV3.py [Excel file path] [Student ID]'
-                - where [Excel file path] is the path to the excel file which you will use for analysis
-                  Ex) 'BlankTemplate.xlsx' or 'C:/Users/Bob/BlankTemplate.xlsx'
-                - where [Student ID] is the numeric ID of the student whose data you would like to analyze
-"""
-import reportlab.rl_config
-reportlab.rl_config.renderPMBackend = 'rlPyCairo'  # Use rlPyCairo as the renderer
-import pandas as pd # Library for readin and writing excel
-import requests # Library to interact with and download URLs
-import os # Library to talk to and manage the opperating system 
-from lxml import etree # Library for reading xml files like SVGs
-# import cairosvg # A graphics library for SVGs based on Cairo, fast but limited, See: touble-shooting cairo
-from svglib.svglib import svg2rlg
-from reportlab.graphics import renderPM
-import json # Library to parse json files without error
-from PIL import Image, ImageTk # Python Image Library, this is what imports and displays the attempts
-import tkinter as tk # Tkinter is the standard library for GUI developement in python
-from tkinter import ttk # An uppdated library of widgets for Tkinter
-from tkinter import scrolledtext # Library to import scolled text boxes
-from tkinter import messagebox # Library to show messages, used for confirm close
-import ast # Library to parse pythonic grammer without error 
+import queue
+from pathlib import Path
+from queue import Queue
 import subprocess
+import tkinter as tk
+from tkinter import messagebox, scrolledtext, ttk
+
+from PIL import Image, ImageTk
+from lxml import etree
+import pandas as pd
+from reportlab.graphics import renderPM
+from svglib.svglib import svg2rlg
+
 import os
+import requests
 import time
 import threading
-from pathlib import Path
-from queue import Queue # thread-safe
-import queue
-import sys
 
-
-class StartupCache:
-
-    cache_file_path = Path(".cache")
-
-    def __init__(self):
-        raise ValueError("StartupCache is not an instantiable class")
-    
-    def save(excel_file_path: Path, student_id: str) -> None:
-        '''
-        Saves data that will be used for the next program startup in a cache file
-        in the current working directory
-        '''
-
-        if StartupCache.cache_file_path.exists():
-            os.remove(StartupCache.cache_file_path)
-
-        data = dict()
-        data["excel_file_path"] = str(excel_file_path)
-        data["student_id"] = student_id
-
-        try:
-            with open(StartupCache.cache_file_path, 'w', encoding='utf-8') as cache_file:
-                json.dump(data, cache_file)
-        except IOError as e:
-            print(f"Error saving cache: {e}")
-
-    def load() -> (Path, str):
-        '''
-        Loads and returns data that will be used during program startup.
-        '''
-        excel_file_path = None
-        student_id = None
-
-        if StartupCache.cache_file_path.exists():
-
-            try:
-                with open(StartupCache.cache_file_path, 'r', encoding='utf-8') as cache_file:
-                    data = json.load(cache_file)
-                    excel_file_path = Path(data["excel_file_path"])
-                    student_id = str(data["student_id"])
-            except:
-                print(f"Error loading cache.")
-
-        return excel_file_path, student_id
+from spatialvis.visgui import get_results
 
 
 
 def convert_svg_to_png_inkscape(svg_path, png_path, width=None, height=None, x0=480, y0=480, x1=1120, y1=1120):
     inkscape_path = r"C:\Program Files\Inkscape\bin\inkscape.exe"
-    
+
     cmd = [
         inkscape_path,
         svg_path,
@@ -103,11 +30,11 @@ def convert_svg_to_png_inkscape(svg_path, png_path, width=None, height=None, x0=
         f"--export-filename={png_path}",  # ← COMMA MUST BE HERE
         f"--export-area={x0}:{y0}:{x1}:{y1}"
     ]
-    
+
     # Add specific dimensions if needed
     if width and height:
         cmd.extend([f"--export-width={width}", f"--export-height={height}"])
-    
+
     try:
         subprocess.run(cmd, check=True, capture_output=True)
         print(f"Successfully converted {svg_path} to {png_path}")
@@ -129,6 +56,7 @@ def perform_png_to_svg_jobs(image_job_queue : Queue((Path, Path))):
         except queue.Empty or queue.ShutDown:
             break
 
+
 def convert_all_submissions_png_to_svg(input_assignments_dir: Path, output_assignments_dir: Path, num_threads=2):
     '''
     This function converts images under the input_assignments_dir folder/directory from SVG to PNG format.
@@ -139,7 +67,7 @@ def convert_all_submissions_png_to_svg(input_assignments_dir: Path, output_assig
     # and the submissions for that assignment as svg images within the assignment folder
 
     # Example folder structure:
-    #
+#
     #             input_assignments_dir
     #                       |
     #                       --------- assignment1_dir
@@ -149,7 +77,7 @@ def convert_all_submissions_png_to_svg(input_assignments_dir: Path, output_assig
     #                                        ------ assignment2_submission1.svg
     #                                        |
     #                                        ------ assignment2_submission2.svg
-    #
+#
     '''
     output_assignments_dir.mkdir(exist_ok=True) # Creates a folder only if it does not already exist
 
@@ -160,15 +88,15 @@ def convert_all_submissions_png_to_svg(input_assignments_dir: Path, output_assig
     # Each tuple is a mapping of the input image path to output image path.
     for individual_input_assignment_dir in input_assignments_dir.iterdir():
         for input_svg_submission_path in individual_input_assignment_dir.iterdir():
-            if input_svg_submission_path.suffix == ".svg": 
-                output_assignment_dir = output_assignments_dir / individual_input_assignment_dir.name 
+            if input_svg_submission_path.suffix == ".svg":
+                output_assignment_dir = output_assignments_dir / individual_input_assignment_dir.name
                 output_assignment_dir.mkdir(parents=True, exist_ok=True)
 
-                output_png_submission_path = output_assignment_dir / input_svg_submission_path.name 
+                output_png_submission_path = output_assignment_dir / input_svg_submission_path.name
                 image_job_queue.put((input_svg_submission_path, output_png_submission_path))
                 num_images += 1
 
-    
+
     perf_check_start_time = time.time()
 
     # Then, we start the threads. Each thread will have access to the same queue. 
@@ -189,6 +117,7 @@ def convert_all_submissions_png_to_svg(input_assignments_dir: Path, output_assig
     # when comparing a single-threaded operation to a four-thread operation on an Intel x86-64 8-core / 16 thread machine
     print(f"SVG to PNG image conversions Complete! It took {time.time() - perf_check_start_time} seconds to convert {num_images} images.")
 
+
 def download_svg(url, output_path, retries=3, delay=5, timeout=30):
     for attempt in range(retries):
         try:
@@ -204,6 +133,7 @@ def download_svg(url, output_path, retries=3, delay=5, timeout=30):
             print(f"Error on attempt {attempt+1}: {e}")
         time.sleep(delay * (attempt + 1))  # Exponential backoff
     print(f"Failed to download {url} after {retries} attempts.")
+
 
 def batch_download(sheet_path, output_path, columns=('sketch_url', 'assignment_code', 'attempt', 'enrollment_id'), sheet_index=0, student=True, dashed=False):
     r"""
@@ -226,7 +156,7 @@ def batch_download(sheet_path, output_path, columns=('sketch_url', 'assignment_c
     # Read the Excel files
     df = pd.read_excel(sheet_path, sheet_name = sheet_index)
     url_column, name_column, attempt_column, SID_column = columns
-    
+
     # Iterate through the URLs and save the SVG files for students
     if student:
         for index, row in df.iterrows():
@@ -265,6 +195,7 @@ def batch_download(sheet_path, output_path, columns=('sketch_url', 'assignment_c
             download_svg(url, filename)
         print("Raw solutions downloaded! Folder Name: rsolutions")
 
+
 def overlay_images(background_path, overlay_path, output_path, type, x=0, y=0):
     """Enhanced overlay function with better coordinate handling"""
     if type == 'svg':
@@ -272,29 +203,29 @@ def overlay_images(background_path, overlay_path, output_path, type, x=0, y=0):
         with open(background_path, 'r') as f:
             background_svg = f.read()
         background_root = etree.fromstring(background_svg.encode('utf-8'))
-        
+
         # Load and parse the overlay SVG
         with open(overlay_path, 'r') as f:
             overlay_svg = f.read()
         overlay_root = etree.fromstring(overlay_svg.encode('utf-8'))
-        
+
         # Create a group for the overlay with proper positioning
         overlay_group = etree.Element('g')
         overlay_group.attrib['transform'] = f'translate({x},{y})'
-        
+
         # Copy all children from overlay to the group
         for child in overlay_root:
             overlay_group.append(child)
-        
+
         # Add the group to the background SVG
         background_root.append(overlay_group)
-        
+
         # Ensure proper viewBox is set
         if 'viewBox' not in background_root.attrib:
             width = background_root.attrib.get('width', '800')
             height = background_root.attrib.get('height', '600')
             background_root.attrib['viewBox'] = f'0 0 {width} {height}'
-        
+
         # Save the combined SVG
         combined_svg = etree.tostring(background_root, pretty_print=True).decode('utf-8')
         with open(output_path, 'w') as f:
@@ -335,7 +266,7 @@ def batch_overlay_images(background_folder, overlay_folder, output_folder, x=0, 
                     if overlay_file.endswith('.svg'):
                         background_path = os.path.join(background_folder, f'{overlay_parent}.svg')
                         overlay_path = os.path.join(overlay_folder, overlay_parent, overlay_file)
-            
+
                         # Check if the corresponding background file exists
                         if os.path.exists(background_path):
                             output_path = os.path.join(output_parent, overlay_file)
@@ -347,7 +278,7 @@ def batch_overlay_images(background_folder, overlay_folder, output_folder, x=0, 
                 if overlay_file.endswith('.svg'):
                     background_path = os.path.join(background_folder, overlay_file)
                     overlay_path = os.path.join(overlay_folder, overlay_file)
-        
+
                     # Check if the corresponding background file exists
                     if os.path.exists(background_path):
                         output_path = os.path.join(output_folder, overlay_file)
@@ -366,7 +297,7 @@ def batch_overlay_images(background_folder, overlay_folder, output_folder, x=0, 
                     if overlay_file.endswith('.png'):
                         background_path = os.path.join(background_folder, f'{overlay_parent}.png')
                         overlay_path = os.path.join(overlay_folder, overlay_parent, overlay_file)
-            
+
                         # Check if the corresponding background file exists
                         if os.path.exists(background_path):
                             output_path = os.path.join(output_parent, overlay_file)
@@ -379,7 +310,7 @@ def batch_overlay_images(background_folder, overlay_folder, output_folder, x=0, 
                 if overlay_file.endswith('.png'):
                     background_path = os.path.join(background_folder, overlay_file)
                     overlay_path = os.path.join(overlay_folder, overlay_file)
-        
+
                     # Check if the corresponding background file exists
                     if os.path.exists(background_path):
                         output_path = os.path.join(output_folder, overlay_file)
@@ -413,7 +344,8 @@ def match_svg_viewbox_and_size(student_svg_path, solution_svg_path, output_svg_p
 
     # Save updated SVG
     with open(output_svg_path, 'wb') as f:
-        f.write(etree.tostring(stu_root, pretty_print=True))       
+        f.write(etree.tostring(stu_root, pretty_print=True))
+
 
 def convert_svgs_to_pngs(input_folder, output_folder, student=True):
     r"""
@@ -445,7 +377,7 @@ def convert_svgs_to_pngs(input_folder, output_folder, student=True):
                     svg_path = os.path.join(input_parent_path, filename)
                     png_filename = os.path.splitext(filename)[0] + ".png"
                     png_path = os.path.join(output_parent, png_filename)
-                    
+
                     try:
                         # Convert SVG to PNG
                         # cairosvg.svg2png(url=svg_path, write_to=png_path, unsafe =  True)
@@ -459,7 +391,7 @@ def convert_svgs_to_pngs(input_folder, output_folder, student=True):
                 svg_path = os.path.join(input_folder, filename)
                 png_filename = os.path.splitext(filename)[0] + ".png"
                 png_path = os.path.join(output_folder, png_filename)
-                
+
                 try:
                     # Convert SVG to PNG
                     # cairosvg.svg2png(url=svg_path, write_to=png_path)
@@ -468,6 +400,22 @@ def convert_svgs_to_pngs(input_folder, output_folder, student=True):
                 except Exception as e:
                     print(f"Failed to convert {svg_path} to PNG. Error: {e}")
     print(f'Processing Complete! Saved to {output_folder}')
+
+
+def save_excel(data_frame, source_file, subsheet_name, if_exists = 'replace'):
+    """
+    This is a function that takes a desired data frame and information about the desired location and saves it. Sheet needs to besaved and closed for proper permissions.
+        =====
+        Inputs:
+            data_frame: The pandas.DataFrame variable that you want to savea an Excel sheet
+            source_file: The location of the file you want to save to as a string path
+            sheet_name: What you want to name the subsheet 
+            if_exists: What to do if the sheet already exists, automatically set to 'replace'. Options:{‘error’, ‘new’, ‘replace’, ‘overlay’}
+    """
+    with pd.ExcelWriter(source_file, mode='a', if_sheet_exists=if_exists) as writer:
+        data_frame.to_excel(writer, sheet_name = subsheet_name, index=False)
+    print('Sheet Saved!')
+
 
 def clean_data(source_file, student_ID):
     r"""
@@ -489,83 +437,12 @@ def clean_data(source_file, student_ID):
     save_excel(df, source_file, student_ID)
     print('Data Cleaned!')
 
-def save_excel(data_frame, source_file, subsheet_name, if_exists = 'replace'):
-    """
-    This is a function that takes a desired data frame and information about the desired location and saves it. Sheet needs to besaved and closed for proper permissions.
-        =====
-        Inputs:
-            data_frame: The pandas.DataFrame variable that you want to savea an Excel sheet
-            source_file: The location of the file you want to save to as a string path
-            sheet_name: What you want to name the subsheet 
-            if_exists: What to do if the sheet already exists, automatically set to 'replace'. Options:{‘error’, ‘new’, ‘replace’, ‘overlay’}
-    """
-    with pd.ExcelWriter(source_file, mode='a', if_sheet_exists=if_exists) as writer:
-        data_frame.to_excel(writer, sheet_name = subsheet_name, index=False)
-    print('Sheet Saved!')
-
-def result_message(grading_metrics):
-    """
-    This is a function which takes the grading_metrics dictionary and determines what message was shown on the results screen
-        =====
-        Inputs: 
-            grading_metrics: A python dictionary with the grading results for the associated drawing, converted from a json object
-        Returns:
-            message: The message as astring of characters that the students would see on the results screen.
-    """
-    solid_correct = grading_metrics['test_add_pix'] and grading_metrics['test_mis_solid_pix'] and grading_metrics['test_add_blob_len'] and grading_metrics['test_mis_solid_blob_len']
-    dashed_correct = grading_metrics['test_dashed_blob_len'] and grading_metrics['test_gap_blob_len']
-    if grading_metrics['pass_sketch']:
-        return('Correct sketch')
-    elif grading_metrics['missing_one_long_solid_blob']:
-        return('You may be missing a line')
-    elif grading_metrics['fh_add_one_long_solid_blob']:
-        return('You may have too many line(s)')
-    elif grading_metrics['fh_large_tol']:
-        return('Close! Draw more carefully')
-    elif solid_correct and not dashed_correct:
-        return('Hidden line(s) incorrect')
-    else:
-        return('Try again')
-
-def get_results(grading_metrics_string):
-    r"""
-    This is a function that takes the grading_metrics dictionary and parses the drawing results. 
-        =====
-        Inputs:
-            grading_metrics_string: A python dictionary, as a string, with the grading results for the associated drawing, converted from a json object
-        Returns:
-            message: The string message shown to the students  
-            correct_percent: Percent of correct pixels from normalized pixel counts
-            missing_percent: Percent of missing pixels from normalized pixel counts
-            additional_percent: Percent of additionl pixels from normalized pixel counts
-        =====
-        Example Usage-Loop:
-            source_file = r"C:\Users\aaron\Documents\VERSA\VERSA_Students.xlsx"
-            df = pd.read_excel(source_file)
-            for ind in df.index:
-                if type(df.at[ind,'grading_metrics']) is str: 
-                    grading_metrics = json.loads(df.at[ind,'grading_metrics'])
-                    df.at[ind,'minihint_metrics'] = get_results(grading_metrics)
-                else:
-                    pass
-    """
-    # The grading metrics data is not all formatted properly thus a try statement is needed
-    try:
-        grading_metrics = json.loads(grading_metrics_string)
-        message = result_message(grading_metrics)
-        correct_percent = grading_metrics['n_cor_combined_pix_norm']/grading_metrics['n_sol_combined_pix_norm']
-        missing_percent = grading_metrics['n_mis_combined_pix_norm']/grading_metrics['n_sol_combined_pix_norm']
-        additional_percent = grading_metrics['n_add_pix_norm']/grading_metrics['n_sol_combined_pix_norm']
-    # If the json file cant be read it just returns a null
-    except:
-        return None, None, None, None 
-    return message, correct_percent, missing_percent, additional_percent
 
 def prepare_analysis(excel_file, image_folder, sID, background_folder):
     """Updated function using Inkscape for conversion"""
     # 1. Download student sketches
     batch_download(excel_file, image_folder, sheet_index=f'{sID}')
-    
+
     # 2. Overlay sketches on backgrounds
     # The background images are the templates from which students compose their drawings.
     # The student's drawings are submitted as separate images from the background images.
@@ -577,32 +454,17 @@ def prepare_analysis(excel_file, image_folder, sID, background_folder):
         svg_output,
         x=480, y=480  # Try with 0,0 first instead of 480,480
     )
-    
+
     # 3. Convert SVGs to PNGs using Inkscape
     png_output = os.path.join(image_folder, f'{sID}_png')
     convert_all_submissions_png_to_svg(  # Use Inkscape version
         input_assignments_dir=Path(svg_output),
         output_assignments_dir=Path(png_output),
     )
-    
+
     # 4. Clean Excel data
     clean_data(excel_file, f'{sID}')
 
-
-
-#def prepare_analysis(excel_file, image_folder, sID, background_folder):
-#    """
-#    Functionn to run before starting the analysis of a new student, it downloads the images, overlays them on the backgrounds and cleans the excel sheet.
-#        =====
-#        Inputs:
-#            excel_file: The parent file of the student data with the subsheets
-#            image_folder: The parent Image folder
-#            sID: The student id you are looking to investigate as an int
-#            background_folder: The specific folder for the background images
-#    """
-#    batch_download(excel_file, image_folder, sheet_index = f'{sID}')
-#    batch_overlay_images(background_folder, os.path.join(image_folder, f'{sID}_rsketches'), os.path.join(image_folder, f'{sID}_svg'), x=480, y=480)
-#    clean_data(excel_file, f'{sID}')
 
 def run_analysis(image_folder, excel_file, start_index, sID, load_in, if_exists = 'replace'):
     r"""
@@ -751,7 +613,7 @@ def run_analysis(image_folder, excel_file, start_index, sID, load_in, if_exists 
             }
             i += 1
             analysis_list.append(analysis_dic)
-    
+
     if len(analysis_list) != len(data):
                 analysis_list = []  # Reset if mismatched
                 for i, item in enumerate(data):
@@ -764,7 +626,7 @@ def run_analysis(image_folder, excel_file, start_index, sID, load_in, if_exists 
                         'evidence': '[Not evaluated]',
                         # ... [other fields with default values] ...
                     }
-                    analysis_list.append(analysis_dic)    
+                    analysis_list.append(analysis_dic)
 
     # Class obect which contains the parent for the GUI
     class SpatialVisViewer(tk.Tk):
@@ -774,7 +636,7 @@ def run_analysis(image_folder, excel_file, start_index, sID, load_in, if_exists 
             self.data = data
             self.analysis = analysis_list
             self.current_index = start_index
-    
+
             # Set up the frame
             self.title("Spatial Vis Image Viewer")
             self.geometry("1400x700")
@@ -805,7 +667,7 @@ def run_analysis(image_folder, excel_file, start_index, sID, load_in, if_exists 
             self.image_frame.columnconfigure((0,1,2), weight = 1, uniform = 'a')
             self.image_frame.rowconfigure(0, weight = 1, uniform = 'a')
             self.image_frame.grid(row = 1, column = 1, sticky = 'news')
-            
+
             # Frame for interaction and data analysis
             self.selection_frame = ttk.Frame(self, borderwidth = 10, relief = tk.GROOVE)
             self.selection_frame.columnconfigure((0,1,2,3), weight = 1, uniform = 'a')
@@ -824,7 +686,7 @@ def run_analysis(image_folder, excel_file, start_index, sID, load_in, if_exists 
             self.description_frame.grid(row = 1, column = 0, sticky = 'news')
             self.comments_frame = ttk.Frame(self.selection_frame)
             self.comments_frame.grid(row=2, column = 2, rowspan= 2, columnspan=2, sticky='news', padx = 5)
-    
+
             ## Functionality
             # Descriptions of te attempts and problem
             self.attempt_label = ttk.Label(self.data_frame, text = "")
@@ -853,41 +715,41 @@ def run_analysis(image_folder, excel_file, start_index, sID, load_in, if_exists 
             self.prev_additional_label.pack()
             self.prev_hint_bool_label.pack()
             self.prev_peek_bool_label.pack()
-                    
+
             # Attempt Image
             self.attempt_image_label = tk.Label(self.image_frame, background = 'white')
             self.attempt_image_label.grid(row=0, column=1)
             self.attempt_image_label_label = tk.Label(self.image_frame, text = "Student attempt", background = 'white')
             self.attempt_image_label_label.grid(row=0, column=1, sticky = 's')
-    
+
             # Solution Image
             self.solution_image_label = ttk.Label(self.image_frame, background = 'white')
             self.solution_image_label.grid(row=0, column=0)
             self.solution_image_label_label = ttk.Label(self.image_frame, text = "Solution", background = 'white')
             self.solution_image_label_label.grid(row=0, column=0, sticky = 's')
-    
+
             # Problem Image
             self.problem_image_label = ttk.Label(self.problem_frame, background = 'white')
             self.problem_image_label.grid(row=0, column=0)
             self.solution_image_label_label = ttk.Label(self.problem_frame, text = "Problem", background = 'white')
             self.solution_image_label_label.grid(row=0, column=0, sticky = 's')
-            
+
             # Next attempt button
             self.next_button = tk.Button(self.function_frame, text="Next attempt", command=self.next_image)
             self.next_button.grid(row=0, column=7, sticky = 'w', padx = 10)
-    
+
             # Last attempt button
             self.last_button = tk.Button(self.function_frame, text="Previous attempt", command=self.last_image)
             self.last_button.grid(row=0, column=6, sticky = 'w', padx = 10)
-    
+
             # Update analysis buttion
             self.update = tk.Button(self.function_frame, text="Update analysis", command=self.update_analysis)
             self.update.grid(row=0, column=4, sticky = 'w', padx = 10)
-    
+
             # Save analysis button
             self.save = tk.Button(self.function_frame, text="Save analysis", command=self.save_to_ouput)
             self.save.grid(row=0, column=3, sticky = 'w', padx = 10)
-            
+
             # Comboboxs (Drop down selections)
             # Correctness combobox
             self.correctness_string = tk.StringVar()
@@ -906,8 +768,8 @@ def run_analysis(image_folder, excel_file, start_index, sID, load_in, if_exists 
             self.grading_combo = ttk.Combobox(self.selection_frame, textvariable = self.grading_string)
             self.grading_combo['values'] = (
                 '[Not evaluated]',
-                'Graded properly', 
-                'Too leaniant', 
+                'Graded properly',
+                'Too leaniant',
                 'Too strict')
             self.grading_label.grid(row = 0, column = 1, sticky = 'n')
             self.grading_combo.grid(row = 1, column = 1, sticky = 'new', padx = 5)
@@ -918,7 +780,7 @@ def run_analysis(image_folder, excel_file, start_index, sID, load_in, if_exists 
             self.hints_combo = ttk.Combobox(self.selection_frame, textvariable = self.hints_string)
             self.hints_combo['values'] = (
                 '[Not evaluated]',
-                'Correct sketch', 
+                'Correct sketch',
                 'You may be missing a line',
                 'You may have too many line(s)',
                 'Close! Draw more carefully',
@@ -934,10 +796,10 @@ def run_analysis(image_folder, excel_file, start_index, sID, load_in, if_exists 
             self.learning_combo = ttk.Combobox(self.selection_frame, textvariable = self.learning_string)
             self.learning_combo['values'] = (
                 '[Not evaluated]',
-                'Learninng from previous attempt', 
+                'Learninng from previous attempt',
                 'Learing from previous problem',
                 'Correct: no evidence',
-                'Incorrect: no evidence', 
+                'Incorrect: no evidence',
                 'Learning from mini-hints',
                 'Learning from hints',
                 'Small changes',
@@ -1021,32 +883,32 @@ def run_analysis(image_folder, excel_file, start_index, sID, load_in, if_exists 
             self.mis_check12_var = tk.StringVar(value = "")
             self.mis_check12 = ttk.Checkbutton(self.mistakes_frame, text = 'Other', variable = self.mis_check12_var, onvalue = "Other", offvalue = "")
             self.mis_check12.grid(row=5,column=1)
-            
+
             ## Comment boxs
             # Hint commets
             self.hint_comment_text = scrolledtext.ScrolledText(self.comments_frame, height = 2, width = 20)
             self.hint_comment_text.grid(row=1, column=0)
             self.hint_comment_label = ttk.Label(self.comments_frame, text = "Other hint:")
             self.hint_comment_label.grid(row=0,column=0)
-            
+
             # Evidence comments
             self.evidence_comment_text = scrolledtext.ScrolledText(self.comments_frame, height = 2, width = 20)
             self.evidence_comment_text.grid(row=1, column=1)
             self.Evidence_comment_label = ttk.Label(self.comments_frame, text = "Other evidence:")
             self.Evidence_comment_label.grid(row=0,column=1)
-    
+
             # Action comments
             self.change_comment_text = scrolledtext.ScrolledText(self.comments_frame, height = 2, width = 20)
             self.change_comment_text.grid(row=3, column=0)
             self.change_comment_label = ttk.Label(self.comments_frame, text = "Other change:")
             self.change_comment_label.grid(row=2,column=0)
-    
+
             # Mistake comments
             self.mistake_comment_text = scrolledtext.ScrolledText(self.comments_frame, height = 2, width = 20)
             self.mistake_comment_text.grid(row=3, column=1)
             self.mistake_comment_label = ttk.Label(self.comments_frame, text = "Other mistake:")
             self.mistake_comment_label.grid(row=2,column=1)
-    
+
             # General comments
             self.gen_comment_text = scrolledtext.ScrolledText(self.comments_frame, height = 2, width = 20)
             self.gen_comment_text.grid(row=5, column=0, columnspan = 2)
@@ -1059,7 +921,7 @@ def run_analysis(image_folder, excel_file, start_index, sID, load_in, if_exists 
         # Function the reads the lists for the right data and updates the GUi
         def update_content(self):
 
-        
+
             def safe_format(value):
                 return f"{(value * 100):.0f}" if value is not None else "N/A"
 
@@ -1104,7 +966,7 @@ def run_analysis(image_folder, excel_file, start_index, sID, load_in, if_exists 
             self.solution_image_label.image = solution_photo
             self.problem_image_label.config(image=problem_photo)
             self.problem_image_label.image = problem_photo
-            
+
             self.problem_label.config(text=attempt_description)
             self.attempt_label.config(text=attempt)
             self.message_label.config(text=message)
@@ -1127,7 +989,7 @@ def run_analysis(image_folder, excel_file, start_index, sID, load_in, if_exists 
                 self.prev_additional_label.config(text="")
                 self.prev_hint_bool_label.config(text="")
                 self.prev_peek_bool_label.config(text="")
-    
+
             # Sets the values of the comboboxes andcomments either to '[Not evaluated] or what was previously selected.'
             self.correctness_combo.set(analysis_item.get('correctness', '[Not evaluated]'))
             self.grading_combo.set(analysis_item.get('grading', '[Not evaluated]'))
@@ -1298,7 +1160,7 @@ def run_analysis(image_folder, excel_file, start_index, sID, load_in, if_exists 
                 # Output dictionary that gets converted to an excel file
                 output_dict = {
                     "id": item['assignment_id'],
-                    "correctness": item['correctness'], 
+                    "correctness": item['correctness'],
                     "grading_algorithm": item['grading'],
                     "best_minihint": item['mini_hints'],
                     "learning_evidence": item['evidence'],
@@ -1311,10 +1173,10 @@ def run_analysis(image_folder, excel_file, start_index, sID, load_in, if_exists 
                     "general_comment": item['gen_comment'],
                     "constructor_dict": constructor_dict
                 }
-    
+
                 output_list.append(output_dict)
-    
-    
+
+
             of = pd.DataFrame(output_list)
             save_excel(of, source_file, sID+'_output', if_exists = if_exists)
 
@@ -1330,35 +1192,33 @@ def run_analysis(image_folder, excel_file, start_index, sID, load_in, if_exists 
             # Close the application
             self.destroy()
             print(f"Closed at index: {self.current_index}")
-            
+
     # Calls and runs the app
     app = SpatialVisViewer(data, analysis_list, start_index)
     app.mainloop()
 
 
-
-
-   # Example of running functions in order
+# Example of running functions in order
 
 def validate_svg(svg_path):
-    """Check if SVG file is valid and get its dimensions"""
-    try:
-        with open(svg_path, 'r') as f:
-            content = f.read()
-        root = etree.fromstring(content.encode('utf-8'))
-        
-        width = root.attrib.get('width', 'Unknown')
-        height = root.attrib.get('height', 'Unknown')
-        viewBox = root.attrib.get('viewBox', 'Not set')
-        
-        print(f"SVG: {svg_path}")
-        print(f"  Width: {width}, Height: {height}")
-        print(f"  ViewBox: {viewBox}")
-        
-        return True
-    except Exception as e:
-        print(f"Invalid SVG {svg_path}: {e}")
-        return False
+ """Check if SVG file is valid and get its dimensions"""
+ try:
+     with open(svg_path, 'r') as f:
+         content = f.read()
+     root = etree.fromstring(content.encode('utf-8'))
+
+     width = root.attrib.get('width', 'Unknown')
+     height = root.attrib.get('height', 'Unknown')
+     viewBox = root.attrib.get('viewBox', 'Not set')
+
+     print(f"SVG: {svg_path}")
+     print(f"  Width: {width}, Height: {height}")
+     print(f"  ViewBox: {viewBox}")
+
+     return True
+ except Exception as e:
+     print(f"Invalid SVG {svg_path}: {e}")
+     return False
 
 
 def download_backgrounds(sheet_path, output_path, columns=('grid_image_file_url', 'assignment_code'), sheet_index='assignments'):
@@ -1372,92 +1232,14 @@ def download_backgrounds(sheet_path, output_path, columns=('grid_image_file_url'
     """
     df = pd.read_excel(sheet_path, sheet_name=sheet_index)
     url_column, name_column = columns
-    
+
     # Create output directory if needed
     if not os.path.exists(output_path):
         os.makedirs(output_path)
-    
+
     for index, row in df.iterrows():
         url = row[url_column]
         name = row[name_column]
         filename = os.path.join(output_path, f"{name}.svg")
         download_svg(url, filename)
     print(f"Background images downloaded to {output_path}!")
-
-
-
-if __name__ == '__main__':
-
-    excel_file_path = None
-    student_id = None
-
-    if len(sys.argv) == 3:
-        try:
-            excel_file_path = Path(sys.argv[1])
-        except:
-            raise ValueError("Invalid Excel file path as second argument")
-        
-        try:
-            student_id = str(sys.argv[2])
-        except:
-            raise ValueError("Invalid student ID as third argument")
-    elif len(sys.argv) == 1:
-        saved_excel_file_path, saved_student_id = StartupCache.load()
-        while excel_file_path is None:
-            input_file_path = input(f"Enter an Excel file path (ex. 'file.xlsx' or 'C:\\\\User\\Bob\\file.xlsx') without quotes ({saved_excel_file_path}): ")
-            if input_file_path == "" and saved_excel_file_path is not None:
-                excel_file_path = saved_excel_file_path
-            else:
-                try:
-                    excel_file_path = Path(input_file_path)
-                except:
-                    print("Invalid Excel file path. Try again.")
-
-        while student_id is None:
-            input_student_id = input(f"Enter a numeric student ID ({saved_student_id}): ")
-            if input_student_id == "" and saved_student_id is not None:
-                    student_id = saved_student_id
-            else:
-                try:
-                    student_id = str(input_student_id)
-                except:
-                    print("Invalid student ID. Try again.")
-    else:
-        raise ValueError("Invalid number of arguments. Expected command format is 'py SpatioalVisV3.py' OR 'py SpatialVisV3.py [Excel file path] [Student ID]' ")
-
-    StartupCache.save(excel_file_path, student_id)
-    Path("./images").mkdir(exist_ok=True)
-    Path("./backgrounds").mkdir(exist_ok=True)
-
-    if not Path("./images/problems_png").exists() or not Path("./images/solns_png").exists():
-        raise FileNotFoundError("The master files for assignment problems and solutions are missing and must be placed in /images/problems_png and /images/solns_png before running the program.")
-
-    file_path = str(excel_file_path)
-    df = pd.read_excel(file_path)
-
-    # 0. Download background images first
-    background_folder = r".\backgrounds"
-    download_backgrounds(
-        sheet_path=str(excel_file_path),
-        output_path=background_folder,
-        columns=('grid_image_file_url', 'assignment_code'),
-        sheet_index='assignments'
-    )
-
-    # 1. Prepare data and images
-    prepare_analysis(
-        excel_file=str(excel_file_path),
-        image_folder=r".\images",
-        sID=student_id,
-        background_folder=background_folder  # Use the populated folder
-    )
-
-    # 2. Run the analysis GUI
-    run_analysis(
-        image_folder=r".\images",
-        excel_file=str(excel_file_path),
-        start_index=0,
-        sID=student_id,
-        load_in=True
-    )
-

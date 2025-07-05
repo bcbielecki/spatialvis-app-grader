@@ -3,3 +3,4 @@
 *.xlsx
 /.venv
 .cache
+__pycache__/
