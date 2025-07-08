@@ -79,7 +79,7 @@ def launch_nogui():
     #### Execute Download, Data Processing, then the Main Analysis GUI ####
 
     # 0. Download background images first
-    background_folder = r".\backgrounds"
+    background_folder = globals.PATH_DATA_BACKGROUNDS
     download_backgrounds(
         sheet_path=str(excel_file_path),
         output_path=background_folder,
