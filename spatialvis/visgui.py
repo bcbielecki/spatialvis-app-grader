@@ -5,7 +5,7 @@ from spatialvis import globals
 import sys
 import random
 from pathlib import Path
-from PySide6 import QtCore, QtWidgets, QtGui
+from PySide6 import QtCore, QtWidgets, QtGui #For GUI - Don't use PyQt as the licensing is different for commercial use - PySide6 is also the official binding for Qt
 
 import os
 
@@ -14,6 +14,7 @@ import os
 # QT Designer manual: https://doc.qt.io/qt-6/qtdesigner-manual.html
 # Use `pyuic6 input.ui -o output.py` to convert .ui files to .py files
 # PySide6 docs: https://doc.qt.io/qtforpython-6/
+# PySide6 tutorial: https://www.youtube.com/watch?v=Z1N9JzNax2k
 
 
 

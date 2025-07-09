@@ -5,4 +5,4 @@ svglib
 reportlab
 pillow
 openpyxl
-PySide6 #For GUI
+PySide6
