@@ -24,8 +24,37 @@ class SpatialVisViewer(QtWidgets.QWidget):
         self.analysis = analysis_list
         self.current_index = start_index
 
-        self.setWindowTitle("Spatial Vis Image Viewer")
         self.resize(1400, 700)
+        # Top half: Tree view for problems
+        self.problem_tree = QtWidgets.QTreeWidget()
+        self.problem_tree.setHeaderLabel("Problems")
+        # Populate the tree
+        if self.data and len(self.data) > 0:
+            student_id = self.data[0].get('student_id', 'Student')
+            student_item = QtWidgets.QTreeWidgetItem([str(student_id)])
+            problems = {}
+            for idx, item in enumerate(self.data):
+                prob_code = item.get('problem_code', f"Problem {idx+1}")
+                if prob_code not in problems:
+                    prob_item = QtWidgets.QTreeWidgetItem([str(prob_code)])
+                    student_item.addChild(prob_item)
+                    problems[prob_code] = prob_item
+                attempt_item = QtWidgets.QTreeWidgetItem([f"Attempt {item.get('attempt', idx)+1}"])
+                problems[prob_code].addChild(attempt_item)
+            self.problem_tree.addTopLevelItem(student_item)
+            self.problem_tree.expandAll()
+        self.problem_tree.setMaximumHeight(200)
+
+        # Bottom half: Problem image and description
+        bottom_widget = QtWidgets.QWidget()
+        bottom_layout = QtWidgets.QVBoxLayout(bottom_widget)
+        self.problem_image_label = QtWidgets.QLabel()
+        self.problem_image_label.setFixedSize(320, 320)
+        self.problem_label = QtWidgets.QLabel()
+        self.problem_label.setWordWrap(True)
+        bottom_layout.addWidget(self.problem_image_label)
+        bottom_layout.addWidget(self.problem_label)
+
 
         # Layouts
         main_layout = QtWidgets.QGridLayout(self)
@@ -35,6 +64,13 @@ class SpatialVisViewer(QtWidgets.QWidget):
         selection_layout = QtWidgets.QGridLayout()
         function_layout = QtWidgets.QHBoxLayout()
         comments_layout = QtWidgets.QGridLayout()
+
+        
+        # Add to problem_layout
+        problem_layout.addWidget(self.problem_tree)
+        problem_layout.addWidget(bottom_widget)
+        problem_layout.setStretch(0, 1)
+        problem_layout.setStretch(1, 2)
 
         # Control Frame (top)
         # ... add buttons, etc. as needed ...
@@ -173,6 +209,16 @@ class SpatialVisViewer(QtWidgets.QWidget):
         self.solution_image_label.setPixmap(load_image(item['solution_path']))
         self.attempt_image_label.setPixmap(load_image(item['sketch_path']))
         self.problem_label.setText(item.get('problem_description', ''))
+
+                # Set white background for image labels
+        for label in [
+            self.problem_image_label,
+            self.solution_image_label,
+            self.attempt_image_label
+        ]:
+            label.setStyleSheet("background-color: white;")
+            
+        self.setWindowTitle("Spatial Vis Image Viewer")
 
         self.attempt_label.setText(f"Attempt: {item.get('attempt', 0)+1}")
         self.message_label.setText(f"Displayed message: {item.get('results', '')}")
