@@ -5,3 +5,4 @@ svglib
 reportlab
 pillow
 openpyxl
+PyQt6 # For GUI

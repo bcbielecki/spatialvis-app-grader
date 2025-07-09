@@ -5,6 +5,10 @@ from spatialvis import globals
 import sys
 from pathlib import Path
 
+# QT Designer: https://realpython.com/qt-designer-python/
+# QT Designer download: https://www.qt.io/download-qt-installer
+# QT Designer manual: https://doc.qt.io/qt-6/qtdesigner-manual.html
+
 
 def launch_nogui():
     excel_file_path = None
