@@ -15,7 +15,7 @@ No systems beyond the aforementioned are officially supported.
 
 - Inkscape v1.4.x or newer
 - Third-party Python packages outlined in the repo's requirements.txt file
-- QT is licensed under GPL version 3
+- Pyside6 QT is licensed under LGPL-3.0
 
 ## Installation Guide
 
