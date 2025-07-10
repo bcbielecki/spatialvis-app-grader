@@ -6,16 +6,40 @@ import sys
 import random
 from pathlib import Path
 from PySide6 import QtCore, QtWidgets, QtGui #For GUI - Don't use PyQt as the licensing is different for commercial use - PySide6 is also the official binding for Qt
+from PySide6.QtUiTools import QUiLoader
+from spatialvis import spatialgui
+
+ui_loader = QUiLoader()
 
 import os
 
 # QT Designer: https://realpython.com/qt-designer-python/
 # QT Designer download: https://www.qt.io/download-qt-installer
 # QT Designer manual: https://doc.qt.io/qt-6/qtdesigner-manual.html
-# Use `pyuic6 input.ui -o output.py` to convert .ui files to .py files
+# Use `pyside6-uic input.ui -o output.py` to convert .ui files to .py files
 # PySide6 docs: https://doc.qt.io/qtforpython-6/
 # PySide6 tutorial: https://www.youtube.com/watch?v=Z1N9JzNax2k
 
+# SVG Widget: https://doc.qt.io/archives/qt-5.15/qsvgwidget.html
+# Decoration: https://doc.qt.io/qt-6/designer-using-containers.html
+# Main Window: https://doc.qt.io/qt-6/qmainwindow.html
+# Icon compilation: https://doc.qt.io/archives/qt-5.15/resources.html
+
+def launch_test_gui():
+    app = QtWidgets.QApplication(sys.argv)
+    window = QtWidgets.QMainWindow()
+
+    windowInitializer = spatialgui.Ui_MainWindow()
+    windowInitializer.setupUi(window)
+
+    # window = ui_loader.load("spatialvis/mainwindow.ui", None)
+    # window.setWindowTitle("Spatial Vis Test GUI")
+    # window.show()
+
+    window.show()
+    window.setWindowTitle("Spatial Vis Test GUI")
+
+    sys.exit(app.exec())
 
 
 class SpatialVisViewer(QtWidgets.QWidget):
