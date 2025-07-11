@@ -1,3 +1,6 @@
+from PySide6.QtWidgets import QLabel
+from PySide6.QtGui import QPixmap, QResizeEvent
+
 # -*- coding: utf-8 -*-
 
 ################################################################################
@@ -20,19 +23,46 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QHBoxLayout,
     QHeaderView, QLabel, QLayout, QMainWindow,
     QMenuBar, QPushButton, QSizePolicy, QStatusBar,
     QTabWidget, QToolBar, QTreeView, QVBoxLayout,
-    QWidget)
+    QWidget, QFrame)
+
+# Scalability: https://doc.qt.io/qt-6/scalability.html
+
+class QProportionalResizeLabel(QLabel):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._aspect_ratio = 1.0
+
+    def setAspectRatio(self, w, h):
+        if h != 0:
+            self._aspect_ratio = w / h
+        else:
+            self._aspect_ratio = 1.0
+
+    def resizeEvent(self, event: QResizeEvent):
+        # Maintain label size proportional to the aspect ratio on resize
+        new_width = event.size().width()
+        new_height = event.size().height()
+        if new_width / self._aspect_ratio <= new_height:
+            w = new_width
+            h = int(w / self._aspect_ratio)
+        else:
+            h = new_height
+            w = int(h * self._aspect_ratio)
+        self.resize(w, h)
+        event.accept()
+        # super().resizeEvent(event)
 
 class Ui_MainWindow(object):
     def setupUi(self, MainWindow):
         if not MainWindow.objectName():
             MainWindow.setObjectName(u"MainWindow")
-        MainWindow.resize(1200, 800)
+        MainWindow.resize(1150, 800)
         sizePolicy = QSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Maximum)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(MainWindow.sizePolicy().hasHeightForWidth())
         MainWindow.setSizePolicy(sizePolicy)
-        MainWindow.setMaximumSize(QSize(1200, 800))
+        #MainWindow.setMaximumSize(QSize(1200, 800))
         MainWindow.setAutoFillBackground(False)
         MainWindow.setDocumentMode(False)
 
@@ -119,16 +149,27 @@ class Ui_MainWindow(object):
 
         self.horizontalLayout_2.addLayout(self.assignment_nav_layout)
 
+        ### Submission Navigator Layout ###
         self.submission_nav_layout = QVBoxLayout()
         self.submission_nav_layout.setObjectName(u"submission_nav_layout")
         self.submission_nav_viewer_layout = QHBoxLayout()
         self.submission_nav_viewer_layout.setObjectName(u"submission_nav_viewer_layout")
-        self.submission_nav_viewer_viewport_layout = QVBoxLayout()
+
+        ## Submission Navigator Viewer Layout ###
+        viewport_viewer_frame = QFrame()
+        viewport_viewer_frame.setLineWidth(1)
+        viewport_viewer_frame.setFrameShape(QFrame.Shape.NoFrame)
+        viewport_viewer_frame.setFrameShadow(QFrame.Shadow.Sunken)
+        viewport_viewer_frame.setObjectName(u"viewport_viewer_frame")
+
+        self.submission_nav_viewer_viewport_layout = QVBoxLayout(viewport_viewer_frame)
         self.submission_nav_viewer_viewport_layout.setObjectName(u"submission_nav_viewer_viewport_layout")
         self.submission_nav_viewer_viewport_img_layout = QHBoxLayout()
         self.submission_nav_viewer_viewport_img_layout.setObjectName(u"submission_nav_viewer_viewport_img_layout")
+
         self.submission_nav_viewport_img_solution_layout = QVBoxLayout()
         self.submission_nav_viewport_img_solution_layout.setObjectName(u"submission_nav_viewport_img_solution_layout")
+
         self.attempt_header_label = QLabel(self.centralwidget)
         self.attempt_header_label.setObjectName(u"attempt_header_label")
 
@@ -136,20 +177,26 @@ class Ui_MainWindow(object):
 
         self.attempt_img_label = QLabel(self.centralwidget)
         self.attempt_img_label.setObjectName(u"attempt_img_label")
-        sizePolicy4 = QSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
-        sizePolicy4.setHorizontalStretch(0)
-        sizePolicy4.setVerticalStretch(0)
-        sizePolicy4.setHeightForWidth(self.attempt_img_label.sizePolicy().hasHeightForWidth())
+
+
+
+        sizePolicy4 = QSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.attempt_img_label = QProportionalResizeLabel(self.centralwidget)
+        self.attempt_img_label.setObjectName(u"attempt_img_label")
         self.attempt_img_label.setSizePolicy(sizePolicy4)
-        self.attempt_img_label.setMinimumSize(QSize(0, 0))
+        self.attempt_img_label.setMinimumSize(QSize(150, 150))
         self.attempt_img_label.setMaximumSize(QSize(300, 300))
         self.attempt_img_label.setStyleSheet(u"background-color: rgb(255, 255, 255);\n"
-"border-style: solid;\n"
-"border-width: 1px;\n"
-"border-radius: 2.5px;\n"
-"border-color: white;")
+                 "border-style: solid;\n"
+                 "border-width: 1px;\n"
+                 "border-radius: 2.5px;\n"
+                 "border-color: white;")
+        self.attempt_img_label.setAlignment(Qt.AlignmentFlag.AlignVCenter)
 
         self.submission_nav_viewport_img_solution_layout.addWidget(self.attempt_img_label)
+        # self.submission_nav_viewport_img_solution_layout.setStretch(0, 1)
+        # self.submission_nav_viewport_img_solution_layout.setStretch(1, 1)
+        self.submission_nav_viewport_img_solution_layout.setAlignment(Qt.AlignmentFlag.AlignHCenter|Qt.AlignmentFlag.AlignVCenter)
 
 
         self.submission_nav_viewer_viewport_img_layout.addLayout(self.submission_nav_viewport_img_solution_layout)
@@ -160,12 +207,13 @@ class Ui_MainWindow(object):
         self.solution_header_label.setObjectName(u"solution_header_label")
 
         self.submission_nav_viewport_img_attempt_layout.addWidget(self.solution_header_label)
+        self.submission_nav_viewport_img_attempt_layout.setAlignment(Qt.AlignmentFlag.AlignHCenter|Qt.AlignmentFlag.AlignVCenter)
 
-        self.solution_img_label = QLabel(self.centralwidget)
+        self.solution_img_label = QProportionalResizeLabel(self.centralwidget)
         self.solution_img_label.setObjectName(u"solution_img_label")
-        sizePolicy4.setHeightForWidth(self.solution_img_label.sizePolicy().hasHeightForWidth())
+        # sizePolicy4.setHeightForWidth(self.solution_img_label.sizePolicy().hasHeightForWidth())
         self.solution_img_label.setSizePolicy(sizePolicy4)
-        self.solution_img_label.setMinimumSize(QSize(0, 0))
+        self.solution_img_label.setMinimumSize(QSize(150, 150))
         self.solution_img_label.setMaximumSize(QSize(300, 300))
         self.solution_img_label.setStyleSheet(u"background-color: rgb(255, 255, 255);\n"
 "border-style: solid;\n"
@@ -181,7 +229,13 @@ class Ui_MainWindow(object):
 
         self.submission_nav_viewer_viewport_layout.addLayout(self.submission_nav_viewer_viewport_img_layout)
 
-        self.submission_nav_viewer_viewport_buttons_layout = QHBoxLayout()
+        self.viewport_button_frame = QFrame()
+        self.viewport_button_frame.setLineWidth(1)
+        self.viewport_button_frame.setFrameShape(QFrame.Shape.StyledPanel)
+        self.viewport_button_frame.setFrameShadow(QFrame.Shadow.Sunken)
+        self.viewport_button_frame.setObjectName(u"viewport_button_frame")
+
+        self.submission_nav_viewer_viewport_buttons_layout = QHBoxLayout(self.viewport_button_frame)
         self.submission_nav_viewer_viewport_buttons_layout.setObjectName(u"submission_nav_viewer_viewport_buttons_layout")
         self.submission_nav_button_previous = QPushButton(self.centralwidget)
         self.submission_nav_button_previous.setObjectName(u"submission_nav_button_previous")
@@ -200,12 +254,13 @@ class Ui_MainWindow(object):
         self.submission_nav_viewer_viewport_buttons_layout.addWidget(self.submission_nav_button_next)
 
 
-        self.submission_nav_viewer_viewport_layout.addLayout(self.submission_nav_viewer_viewport_buttons_layout)
+        #self.submission_nav_viewer_viewport_layout.addLayout(self.submission_nav_viewer_viewport_buttons_layout)
+        self.submission_nav_viewer_viewport_layout.addWidget(self.viewport_button_frame)
 
-        self.submission_nav_viewer_viewport_layout.setStretch(0, 8)
-        self.submission_nav_viewer_viewport_layout.setStretch(1, 1)
+        # self.submission_nav_viewer_viewport_layout.setStretch(1, 1)
 
-        self.submission_nav_viewer_layout.addLayout(self.submission_nav_viewer_viewport_layout)
+        # self.submission_nav_viewer_layout.addLayout(self.submission_nav_viewer_viewport_layout)
+        self.submission_nav_viewer_layout.addWidget(viewport_viewer_frame)
 
         self.tabWidget = QTabWidget(self.centralwidget)
         self.tabWidget.setObjectName(u"tabWidget")
@@ -223,7 +278,7 @@ class Ui_MainWindow(object):
 
         self.submission_nav_viewer_layout.addWidget(self.tabWidget)
 
-        self.submission_nav_viewer_layout.setStretch(0, 3)
+        self.submission_nav_viewer_layout.setStretch(0, 2)
         self.submission_nav_viewer_layout.setStretch(1, 1)
 
         self.submission_nav_layout.addLayout(self.submission_nav_viewer_layout)
@@ -361,9 +416,9 @@ class Ui_MainWindow(object):
         self.assignment_nav_header_label.setText(QCoreApplication.translate("MainWindow", u"Assignment Navigator", None))
         self.assignment_nav_img_label.setText(QCoreApplication.translate("MainWindow", u" Assignment Image", None))
         self.assignment_nav_desc_label.setText(QCoreApplication.translate("MainWindow", u"TextLabel", None))
-        self.attempt_header_label.setText(QCoreApplication.translate("MainWindow", u"TextLabel", None))
+        self.attempt_header_label.setText(QCoreApplication.translate("MainWindow", u"Solution", None))
         self.attempt_img_label.setText(QCoreApplication.translate("MainWindow", u" Assignment Image", None))
-        self.solution_header_label.setText(QCoreApplication.translate("MainWindow", u"TextLabel", None))
+        self.solution_header_label.setText(QCoreApplication.translate("MainWindow", u"Attempt", None))
         self.solution_img_label.setText(QCoreApplication.translate("MainWindow", u" Assignment Image", None))
         self.submission_nav_button_previous.setText("")
         self.submission_nav_button_next.setText("")
